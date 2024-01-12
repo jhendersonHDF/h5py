@@ -463,6 +463,36 @@ cdef class DatasetID(ObjectID):
         """
         H5Drefresh(self.id)
 
+    IF HDF5_VERSION >= (1, 12, 0):
+
+        @with_phil
+        def reclaim(self, SpaceID mspace not None, ndarray arr_obj not None, TypeID mtype=None):
+            """ no return
+
+            Reclaims memory allocated by the HDF5 library after reading
+            from a dataset with a variable-length or reference datatype
+            """
+            cdef mspace_id, mtype_id
+            cdef void* data
+
+            try:
+                if mtype is None:
+                    mtype = py_create(arr_obj.dtype)
+
+                if mspace.id == H5S_ALL:
+                    mspace_id = H5Dget_space(self.id)
+                else:
+                    mspace_id = mspace.id
+
+                mtype_id = mtype.id
+                data = PyArray_DATA(arr_obj)
+
+                H5Treclaim(mtype_id, mspace_id, H5P_DEFAULT, data)
+
+            finally:
+                if mspace_id:
+                    H5Sclose(mspace_id)
+
     def write_direct_chunk(self, offsets, data, filter_mask=0x00000000, PropID dxpl=None):
         """ (offsets, data, uint32_t filter_mask=0x00000000, PropID dxpl=None)
 
@@ -509,7 +539,6 @@ cdef class DatasetID(ObjectID):
             PyBuffer_Release(&view)
             if space_id:
                 H5Sclose(space_id)
-
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

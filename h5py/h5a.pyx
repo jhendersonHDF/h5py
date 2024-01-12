@@ -12,6 +12,8 @@
     Provides access to the low-level HDF5 "H5A" attribute interface.
 """
 
+include "config.pxi"
+
 # C-level imports
 from ._objects cimport pdefault
 from .h5t cimport TypeID, typewrap, py_create
@@ -441,3 +443,30 @@ cdef class AttrID(ObjectID):
         Get the amount of storage required for this attribute.
         """
         return H5Aget_storage_size(self.id)
+
+    IF HDF5_VERSION >= (1, 12, 0):
+
+        @with_phil
+        def reclaim(self, ndarray arr not None, TypeID mtype=None):
+            """ no return
+
+            Reclaims memory allocated by the HDF5 library after reading
+            from an attribute with a variable-length or reference datatype
+            """
+            cdef mspace_id, mtype_id
+            cdef void* data
+
+            try:
+                if mtype is None:
+                    mtype = py_create(arr.dtype)
+
+                mspace_id = H5Aget_space(self.id)
+
+                mtype_id = mtype.id
+                data = PyArray_DATA(arr)
+
+                H5Treclaim(mtype_id, mspace_id, H5P_DEFAULT, data)
+
+            finally:
+                if mspace_id:
+                    H5Aclose(mspace_id)
